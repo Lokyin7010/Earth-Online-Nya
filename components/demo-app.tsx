@@ -28,7 +28,7 @@ type SessionState = {
 type CalibrationMode = "delta" | "set";
 type MobileTab = "home" | "status" | "events" | "logs" | "admin";
 type StatusTheme = "steady" | "tired" | "tense" | "recovering" | "bright";
-type EventPhase = "idle" | "resolving" | "awaiting-next";
+type EventPhase = "idle" | "resolving";
 
 const REASON_OPTIONS = [
   "主观状态修正",
@@ -38,7 +38,7 @@ const REASON_OPTIONS = [
   "测试校准",
 ];
 
-const STAT_KEYS: (keyof StatBlock)[] = ["hp", "ep", "mood", "stress", "focus"];
+const STAT_KEYS: DimensionKey[] = ["hp", "ep", "mood", "stress", "focus"];
 
 function getRoleLabel(role: "admin" | "tester") {
   return role === "admin" ? "管理员" : "测试用户";
@@ -87,6 +87,11 @@ function getCompactDimensionLabel(key: DimensionKey) {
   return map[key];
 }
 
+function getStatBarPercent(key: DimensionKey, value: number) {
+  const displayValue = key === "stress" ? Math.max(0, Math.abs(value)) : Math.max(0, value);
+  return Math.min(100, Math.round(displayValue));
+}
+
 function getRandomCategoryId(excludeId?: string) {
   if (dailyEventCategories.length === 0) {
     return "";
@@ -104,9 +109,12 @@ function getRandomCategoryId(excludeId?: string) {
 }
 
 function getLocalDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const utcTime = date.getTime();
+  const utc8Time = utcTime + 8 * 60 * 60 * 1000;
+  const utc8Date = new Date(utc8Time);
+  const year = utc8Date.getUTCFullYear();
+  const month = String(utc8Date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(utc8Date.getUTCDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -251,6 +259,20 @@ export function DemoApp() {
     () => data.adminLogs.filter((log) => log.targetUserId === activeUser?.id),
     [activeUser?.id, data.adminLogs],
   );
+  const todayEventCount = useMemo(() => {
+    if (!activeState) {
+      return 0;
+    }
+
+    const todayKey = getLocalDateKey();
+    const progress = activeState.dailyProgress;
+
+    if (!progress || progress.dateKey !== todayKey) {
+      return 0;
+    }
+
+    return progress.count;
+  }, [activeState]);
 
   const projection =
     activeUser && activeState ? projectState(activeUser, activeState, data.dailyLogs) : null;
@@ -258,9 +280,11 @@ export function DemoApp() {
     activeState ? getStatusTheme(activeState.stats, activeLogs[0]) : "steady";
 
   const currentEventCategory =
-    dailyEventCategories.find((category) => category.id === currentEventCategoryId) ??
-    dailyEventCategories[0] ??
-    null;
+    todayEventCount >= 99
+      ? null
+      : dailyEventCategories.find((category) => category.id === currentEventCategoryId) ??
+        dailyEventCategories[0] ??
+        null;
 
   const mobileTabs =
     currentUser?.role === "admin"
@@ -331,6 +355,13 @@ export function DemoApp() {
     };
 
     setData((current) => {
+      const currentUserState = current.userStates[activeUser.id];
+      const existingProgress = currentUserState.dailyProgress;
+      const nextCount =
+        existingProgress && existingProgress.dateKey === dateKey
+          ? existingProgress.count + 1
+          : 1;
+
       const nextDailyLogs = [
         log,
         ...current.dailyLogs.filter(
@@ -343,16 +374,20 @@ export function DemoApp() {
         ),
       ].slice(0, 60);
 
-      return {
-        userStates: {
-          ...current.userStates,
-          [activeUser.id]: {
-            ...current.userStates[activeUser.id],
-            stats: { ...nextProjection.nextStats },
-            draftSelections: {},
-            updatedAt: now.toISOString(),
+        return {
+          userStates: {
+            ...current.userStates,
+            [activeUser.id]: {
+              ...currentUserState,
+              stats: { ...nextProjection.nextStats },
+              draftSelections: {},
+              dailyProgress: {
+                dateKey,
+                count: nextCount,
+              },
+              updatedAt: now.toISOString(),
+            },
           },
-        },
         dailyLogs: nextDailyLogs,
         adminLogs: current.adminLogs,
       };
@@ -377,9 +412,10 @@ export function DemoApp() {
 
       window.setTimeout(() => {
         commitSelection(categoryId, optionId);
-        setPendingNextCategoryId(nextCategoryId);
         setResolvingOptionId("");
-        setEventPhase("awaiting-next");
+        setCurrentEventCategoryId(nextCategoryId);
+        setPendingNextCategoryId("");
+        setEventPhase("idle");
       }, 420);
       return;
     }
@@ -413,13 +449,7 @@ export function DemoApp() {
     const before = activeState.stats[calibrationDimension];
     let after = calibrationMode === "delta" ? before + rawValue : rawValue;
 
-    if (calibrationDimension === "hpMax") {
-      after = clamp(after, 70, 140);
-    } else if (calibrationDimension === "hp") {
-      after = clamp(after, 0, activeState.stats.hpMax);
-    } else {
-      after = clamp(after, 0, 100);
-    }
+    after = Math.round(after);
 
     const delta = after - before;
 
@@ -431,10 +461,6 @@ export function DemoApp() {
       ...activeState.stats,
       [calibrationDimension]: after,
     };
-
-    if (calibrationDimension === "hpMax") {
-      nextStats.hp = clamp(nextStats.hp, 0, after);
-    }
 
     const reason = calibrationNote.trim()
       ? `${calibrationReason} / ${calibrationNote.trim()}`
@@ -477,15 +503,6 @@ export function DemoApp() {
     }
 
     setCurrentEventCategoryId((current) => getRandomCategoryId(current));
-    setPendingNextCategoryId("");
-    setResolvingOptionId("");
-    setEventPhase("idle");
-  };
-
-  const showNextQuestion = () => {
-    setCurrentEventCategoryId(
-      pendingNextCategoryId || getRandomCategoryId(currentEventCategoryId),
-    );
     setPendingNextCategoryId("");
     setResolvingOptionId("");
     setEventPhase("idle");
@@ -669,18 +686,13 @@ export function DemoApp() {
                   <div className="stats-stack">
                     {STAT_KEYS.map((key) => {
                       const value = activeState.stats[key];
-                      const max =
-                        key === "hp" ? activeState.stats.hpMax : key === "hpMax" ? 140 : 100;
-                      const percentage = Math.min(100, Math.round((value / max) * 100));
+                      const percentage = getStatBarPercent(key, value);
 
                       return (
                         <article key={key} className="stat-card">
                           <div className="stat-head">
                             <span>{getDimensionLabel(key)}</span>
-                            <strong>
-                              {value}
-                              {key === "hp" ? ` / ${activeState.stats.hpMax}` : ""}
-                            </strong>
+                            <strong>{value}</strong>
                           </div>
                           <div className={`scribble-bar tone-${getDimensionTone(key)}`}>
                             <span style={{ width: `${percentage}%` }} />
@@ -697,8 +709,8 @@ export function DemoApp() {
           <div className={getPaneClass("events")}>
             <section className="ink-card sketch-panel fill-panel">
               <div className="doodle-titlebar">
-                <span>记录</span>
-                <span>慢慢点，不着急</span>
+                <span>{`记录 (${todayEventCount}/99)`}</span>
+                <span>再次点击以提交状态</span>
               </div>
 
               <div className="doodle-scroll mobile-scene">
@@ -706,21 +718,6 @@ export function DemoApp() {
 
                 {currentEventCategory ? (
                   <div className="event-stack">
-                    {eventPhase === "awaiting-next" ? (
-                      <section className="story-block next-question-block">
-                        <DoodleMarks className="inline-doodles" />
-                        <div className="subhead">
-                          <h3>记录完成</h3>
-                          <span>继续下一题</span>
-                        </div>
-                        <button
-                          className="ink-button primary-ink-button one-more-button"
-                          onClick={showNextQuestion}
-                        >
-                          one more ?
-                        </button>
-                      </section>
-                    ) : (
                     <article
                       key={currentEventCategory.id}
                       className={eventPhase === "resolving" ? "event-block resolving" : "event-block"}
@@ -761,9 +758,16 @@ export function DemoApp() {
                         })}
                       </div>
                     </article>
-                    )}
                   </div>
-                ) : null}
+                ) : (
+                  <section className="story-block">
+                    <div className="subhead">
+                      <h3>今日已满</h3>
+                      <span>99 / 99</span>
+                    </div>
+                    <p className="doodle-copy">今天的记录次数已经用完，明天再继续。</p>
+                  </section>
+                )}
               </div>
             </section>
           </div>

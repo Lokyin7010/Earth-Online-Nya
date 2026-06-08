@@ -60,7 +60,7 @@ export const dailyEventCategories: EventCategory[] = [
       {
         id: "sleep-poor",
         label: "不足",
-        description: "睡得浅，醒得早，恢复中断。",
+        description: "好好睡觉谢谢",
         delta: { hp: -4, ep: -14, mood: -5, stress: 7, focus: -10 },
         tags: ["late-sleep", "sleep-debt"],
       },
@@ -81,27 +81,27 @@ export const dailyEventCategories: EventCategory[] = [
   },
   {
     id: "sitting",
-    title: "久坐",
-    subtitle: "身体在椅子上停留了多久？",
+    title: "神秘按钮",
+    subtitle: "奖励关卡",
     selectionMode: "single",
     options: [
       {
         id: "sit-low",
-        label: "<4h",
-        description: "身体负担较轻。",
+        label: "红色button",
+        description: "按下红色按钮",
         delta: {},
       },
       {
         id: "sit-mid",
-        label: "4-8h",
-        description: "循环下降，肩颈提出抗议。",
+        label: "蓝色button",
+        description: "按下蓝色按钮",
         delta: { hp: -2, ep: -6, mood: -2, stress: 4, focus: -5 },
         tags: ["sedentary"],
       },
       {
         id: "sit-high",
-        label: "8h+",
-        description: "身体进入僵直区，负担明显增加。",
+        label: "绿色button",
+        description: "按下绿色按钮",
         delta: { hp: -4, ep: -10, mood: -4, stress: 8, focus: -8 },
         tags: ["sedentary", "high-risk"],
       },
@@ -109,27 +109,27 @@ export const dailyEventCategories: EventCategory[] = [
   },
   {
     id: "screen",
-    title: "盯屏",
-    subtitle: "今天与发光屏幕相处了多久？",
+    title: "奖励在群里发言10句话",
+    subtitle: "汪汪汪汪汪汪",
     selectionMode: "single",
     options: [
       {
         id: "screen-low",
-        label: "<4h",
-        description: "视线尚可承受。",
+        label: "汪",
+        description: "@一下每个人",
         delta: {},
       },
       {
         id: "screen-mid",
-        label: "4-8h",
-        description: "眼睛疲劳开始堆积。",
+        label: "汪汪",
+        description: "拍一拍每个人",
         delta: { hp: -1, ep: -5, mood: -2, stress: 3, focus: -6 },
         tags: ["screen-time"],
       },
       {
         id: "screen-high",
-        label: "8h+",
-        description: "视线与神经都在超时运转。",
+        label: "汪汪汪",
+        description: "无话可说",
         delta: { hp: -3, ep: -9, mood: -4, stress: 6, focus: -10 },
         tags: ["screen-time", "high-risk"],
       },
@@ -144,26 +144,26 @@ export const dailyEventCategories: EventCategory[] = [
       {
         id: "work-light",
         label: "轻松",
-        description: "节奏平稳，系统尚有余裕。",
+        description: "我不是很想上班",
         delta: { ep: -2, mood: 1, stress: -1, focus: 1 },
       },
       {
         id: "work-normal",
         label: "普通",
-        description: "标准日常任务。",
+        description: "我不想上班",
         delta: { ep: -4, stress: 2, focus: -1 },
       },
       {
         id: "work-heavy",
         label: "繁忙",
-        description: "脑内指令堆叠，精神负荷上升。",
+        description: "我真的不想上班",
         delta: { hp: -1, ep: -8, mood: -3, stress: 7, focus: -4 },
         tags: ["pressure-source"],
       },
       {
         id: "work-overload",
         label: "过载",
-        description: "今日战线过长，状态出现明显波动。",
+        description: "我不要上班啊啊啊",
         delta: { hp: -3, ep: -12, mood: -6, stress: 12, focus: -8 },
         tags: ["pressure-source", "high-risk"],
       },
@@ -226,7 +226,7 @@ export const dailyEventCategories: EventCategory[] = [
       {
         id: "game-low",
         label: "1-3h",
-        description: "轻度放松，情绪得到整理。",
+        description: "原神！启动！",
         delta: { ep: -1, mood: 2, stress: -1, focus: -1 },
       },
       {
@@ -239,7 +239,7 @@ export const dailyEventCategories: EventCategory[] = [
       {
         id: "game-high",
         label: "6h+",
-        description: "沉浸过深，精神与身体双双偏移。",
+        description: "我们要打一辈子游戏啊",
         delta: { hp: -4, ep: -8, mood: -3, stress: 4, focus: -10 },
         tags: ["gaming", "high-risk"],
       },
@@ -253,9 +253,9 @@ export const dailyEventCategories: EventCategory[] = [
     options: [
       {
         id: "emotion-bad",
-        label: "很差",
-        description: "内心阴云未散，系统稳定性下降。",
-        delta: { ep: -3, mood: -8, stress: 8, focus: -5 },
+        label: "管理员选项",
+        description: "已在群里和妍妍说话",
+        delta: { ep: -10, mood: 100, stress: -10, focus: -10 },
         tags: ["negative-mood"],
       },
       {
@@ -287,9 +287,9 @@ export const dailyEventCategories: EventCategory[] = [
       },
       {
         id: "wellness-basic",
-        label: "喝水拉伸",
-        description: "基础恢复动作完成。",
-        delta: { hp: 2, ep: 4, mood: 3, stress: -3, focus: 2 },
+        label: "健身",
+        description: "要好好活着啊",
+        delta: { hp: 10, ep: 4, mood: 3, stress: -3, focus: 2 },
         tags: ["wellness"],
       },
       {

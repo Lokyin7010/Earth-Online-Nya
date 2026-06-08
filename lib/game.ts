@@ -22,6 +22,10 @@ export type UserState = {
   userId: string;
   stats: StatBlock;
   draftSelections: DailySelections;
+  dailyProgress?: {
+    dateKey: string;
+    count: number;
+  };
   updatedAt: string;
 };
 
@@ -82,6 +86,10 @@ const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function roundStat(value: number) {
+  return Math.round(value);
 }
 
 function getModifier(
@@ -162,28 +170,33 @@ export function computeHpMax(
 }
 
 export function createInitialData(): DemoData {
+  const now = new Date().toISOString();
   const userStates = Object.fromEntries(
     demoUsers.map((user) => {
       const hpMax = computeProfileHpMax(user.profile);
       const seededStats: StatBlock = {
-        hp: clamp(user.baseline.hp ?? BASELINE_DEFAULTS.hp, 0, hpMax),
+        hp: roundStat(user.baseline.hp ?? BASELINE_DEFAULTS.hp),
         hpMax,
-        ep: clamp(user.baseline.ep ?? BASELINE_DEFAULTS.ep, 0, 100),
-        mood: clamp(user.baseline.mood ?? BASELINE_DEFAULTS.mood, 0, 100),
-        stress: clamp(user.baseline.stress ?? BASELINE_DEFAULTS.stress, 0, 100),
-        focus: clamp(user.baseline.focus ?? BASELINE_DEFAULTS.focus, 0, 100),
+        ep: roundStat(user.baseline.ep ?? BASELINE_DEFAULTS.ep),
+        mood: roundStat(user.baseline.mood ?? BASELINE_DEFAULTS.mood),
+        stress: roundStat(user.baseline.stress ?? BASELINE_DEFAULTS.stress),
+        focus: roundStat(user.baseline.focus ?? BASELINE_DEFAULTS.focus),
       };
 
-      return [
-        user.id,
-        {
-          userId: user.id,
-          stats: seededStats,
-          draftSelections: {},
-          updatedAt: new Date().toISOString(),
-        } satisfies UserState,
-      ];
-    }),
+        return [
+          user.id,
+          {
+            userId: user.id,
+            stats: seededStats,
+            draftSelections: {},
+            dailyProgress: {
+              dateKey: "",
+              count: 0,
+            },
+            updatedAt: now,
+          } satisfies UserState,
+        ];
+      }),
   );
 
   return {
@@ -216,11 +229,11 @@ function mergeDelta(
 function applyDelta(stats: StatBlock, delta: DimensionDelta): StatBlock {
   const next = { ...stats };
 
-  next.hp = clamp(next.hp + (delta.hp ?? 0), 0, next.hpMax);
-  next.ep = clamp(next.ep + (delta.ep ?? 0), 0, 100);
-  next.mood = clamp(next.mood + (delta.mood ?? 0), 0, 100);
-  next.stress = clamp(next.stress + (delta.stress ?? 0), 0, 100);
-  next.focus = clamp(next.focus + (delta.focus ?? 0), 0, 100);
+  next.hp = roundStat(next.hp + (delta.hp ?? 0));
+  next.ep = roundStat(next.ep + (delta.ep ?? 0));
+  next.mood = roundStat(next.mood + (delta.mood ?? 0));
+  next.stress = roundStat(next.stress + (delta.stress ?? 0));
+  next.focus = roundStat(next.focus + (delta.focus ?? 0));
 
   return next;
 }
@@ -334,7 +347,7 @@ export function projectState(
   const baseStats = {
     ...state.stats,
     hpMax,
-    hp: clamp(state.stats.hp, 0, hpMax),
+    hp: roundStat(state.stats.hp),
   };
   const baseDelta = getBaseDelta(state.draftSelections);
   const afterBase = applyDelta(baseStats, baseDelta);

@@ -303,6 +303,7 @@ button {
   display: flex;
   align-items: center;
   gap: 10px;
+  justify-content: flex-end;
 }
 
 .identity-chip,
@@ -317,8 +318,8 @@ button {
 
 .identity-chip {
   min-width: 140px;
-  min-height: 54px;
-  padding: 12px 16px;
+  min-height: 46px;
+  padding: 9px 14px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -328,13 +329,13 @@ button {
 
 .identity-chip span {
   color: var(--ink-soft);
-  font-size: 0.8rem;
+  font-size: 0.68rem;
 }
 
 .board-header-tools .identity-chip,
 .board-header-tools .ink-button {
-  min-height: 54px;
-  padding: 12px 16px;
+  min-height: 46px;
+  padding: 9px 14px;
   border-radius: 16px 8px 18px 10px;
 }
 
@@ -763,19 +764,6 @@ button {
   animation: selectedFadeAway 0.42s ease forwards;
 }
 
-.next-question-block {
-  min-height: 180px;
-  align-content: center;
-}
-
-.one-more-button {
-  width: 100%;
-  min-height: 54px;
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-  text-transform: lowercase;
-}
-
 .option-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1038,13 +1026,13 @@ button {
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
   }
 
   .identity-chip {
     min-width: 0;
-    min-height: 40px;
-    padding: 8px 10px;
+    min-height: 34px;
+    padding: 6px 8px;
     gap: 0;
   }
 
@@ -1053,15 +1041,15 @@ button {
   }
 
   .identity-chip strong {
-    font-size: 0.84rem;
+    font-size: 0.72rem;
     line-height: 1.1;
   }
 
   .board-header-tools .identity-chip,
   .board-header .ink-button {
-    min-height: 40px;
-    padding: 8px 10px;
-    font-size: 0.84rem;
+    min-height: 34px;
+    padding: 6px 8px;
+    font-size: 0.72rem;
   }
 
   .mobile-tabs {
