@@ -482,6 +482,10 @@ button {
   padding-top: 18px;
 }
 
+.home-hero-block {
+  gap: 16px;
+}
+
 .inline-doodles {
   justify-self: end;
 }
@@ -632,6 +636,35 @@ button {
   padding: 7px 10px;
   border-radius: 999px;
   font-size: 0.8rem;
+}
+
+.manual-tag-chip {
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.manual-tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-content: flex-start;
+}
+
+.manual-tag-chip.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.submit-chip {
+  white-space: nowrap;
+  min-height: 30px !important;
+  padding: 4px 8px !important;
+  font-size: 0.7rem !important;
+  line-height: 1;
 }
 
 .subhead {

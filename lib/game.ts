@@ -26,6 +26,16 @@ export type UserState = {
     dateKey: string;
     count: number;
   };
+  manualTags?: {
+    dateKey: string;
+    count: number;
+    items: Array<{
+      id: string;
+      baseKey: string;
+      label: string;
+      sign: 1 | -1;
+    }>;
+  };
   updatedAt: string;
 };
 
@@ -34,6 +44,14 @@ export type DailyLog = {
   userId: string;
   createdAt: string;
   dateKey?: string;
+  entries?: Array<{
+    type?: "event" | "manual-tag";
+    categoryId: string;
+    categoryTitle: string;
+    optionId: string;
+    optionLabel: string;
+  }>;
+  manualTagDelta?: DimensionDelta;
   selections: DailySelections;
   baseDelta: DimensionDelta;
   ruleDelta: DimensionDelta;
@@ -192,6 +210,11 @@ export function createInitialData(): DemoData {
             dailyProgress: {
               dateKey: "",
               count: 0,
+            },
+            manualTags: {
+              dateKey: "",
+              count: 0,
+              items: [],
             },
             updatedAt: now,
           } satisfies UserState,

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { authRules, demoUsers } from "../demo-users";
@@ -29,6 +29,16 @@ type CalibrationMode = "delta" | "set";
 type MobileTab = "home" | "status" | "events" | "logs" | "admin";
 type StatusTheme = "steady" | "tired" | "tense" | "recovering" | "bright";
 type EventPhase = "idle" | "resolving";
+type ManualTagKey =
+  | "spirit"
+  | "san"
+  | "expectation"
+  | "hope"
+  | "intelligence"
+  | "energy"
+  | "mood"
+  | "pressure"
+  | "sleep";
 
 const REASON_OPTIONS = [
   "主观状态修正",
@@ -39,6 +49,21 @@ const REASON_OPTIONS = [
 ];
 
 const STAT_KEYS: DimensionKey[] = ["hp", "ep", "mood", "stress", "focus"];
+const MANUAL_TAG_LIBRARY: Array<{
+  key: ManualTagKey;
+  label: string;
+  delta: Partial<Record<DimensionKey, number>>;
+}> = [
+  { key: "spirit", label: "精神", delta: { focus: 2, mood: 1 } },
+  { key: "san", label: "SAN", delta: { stress: -2, mood: 1 } },
+  { key: "expectation", label: "期待", delta: { mood: 2, focus: 1 } },
+  { key: "hope", label: "希望", delta: { mood: 2, stress: -1 } },
+  { key: "intelligence", label: "智力", delta: { focus: 3 } },
+  { key: "energy", label: "能量", delta: { ep: 3, hp: 1 } },
+  { key: "mood", label: "心情", delta: { mood: 3 } },
+  { key: "pressure", label: "压力", delta: { stress: 3, focus: -1 } },
+  { key: "sleep", label: "睡眠", delta: { ep: 2, hp: 2, stress: -1 } },
+];
 
 function getRoleLabel(role: "admin" | "tester") {
   return role === "admin" ? "管理员" : "测试用户";
@@ -75,6 +100,30 @@ function getStatusTheme(stats: StatBlock, latestLog?: DailyLog): StatusTheme {
   return "steady";
 }
 
+function getStatusThemeLabel(theme: StatusTheme) {
+  const map: Record<StatusTheme, string> = {
+    steady: "稳定",
+    tired: "疲劳边缘",
+    tense: "紧绷",
+    recovering: "恢复中",
+    bright: "状态极佳",
+  };
+
+  return map[theme];
+}
+
+function getStatusThemeMessage(theme: StatusTheme) {
+  const map: Record<StatusTheme, string> = {
+    steady: "今天的状态暂时平稳。",
+    tired: "精神有些发紧，身体也在提醒你慢一点。",
+    tense: "压力正在上升，今天的空气有些发紧。",
+    recovering: "状态正在回暖，恢复还在继续。",
+    bright: "今天的整体状态很轻，像是顺风的一天。",
+  };
+
+  return map[theme];
+}
+
 function getCompactDimensionLabel(key: DimensionKey) {
   const map: Record<DimensionKey, string> = {
     hp: "健康",
@@ -85,6 +134,84 @@ function getCompactDimensionLabel(key: DimensionKey) {
   };
 
   return map[key];
+}
+
+function mergeDimensionDeltas(
+  left: Partial<Record<DimensionKey, number>>,
+  right: Partial<Record<DimensionKey, number>>,
+) {
+  const keys: DimensionKey[] = ["hp", "ep", "mood", "stress", "focus"];
+  const merged: Partial<Record<DimensionKey, number>> = {};
+
+  keys.forEach((key) => {
+    const total = (left[key] ?? 0) + (right[key] ?? 0);
+    if (total !== 0) {
+      merged[key] = total;
+    }
+  });
+
+  return merged;
+}
+
+function subtractDimensionDeltas(
+  left: Partial<Record<DimensionKey, number>>,
+  right: Partial<Record<DimensionKey, number>>,
+) {
+  const keys: DimensionKey[] = ["hp", "ep", "mood", "stress", "focus"];
+  const merged: Partial<Record<DimensionKey, number>> = {};
+
+  keys.forEach((key) => {
+    const total = (left[key] ?? 0) - (right[key] ?? 0);
+    if (total !== 0) {
+      merged[key] = total;
+    }
+  });
+
+  return merged;
+}
+
+function multiplyDimensionDelta(
+  delta: Partial<Record<DimensionKey, number>>,
+  factor: number,
+) {
+  const keys: DimensionKey[] = ["hp", "ep", "mood", "stress", "focus"];
+  const result: Partial<Record<DimensionKey, number>> = {};
+
+  keys.forEach((key) => {
+    const value = delta[key];
+    if (typeof value === "number" && value !== 0) {
+      result[key] = value * factor;
+    }
+  });
+
+  return result;
+}
+
+function applyStatDelta(
+  stats: StatBlock,
+  delta: Partial<Record<DimensionKey, number>>,
+) {
+  return {
+    ...stats,
+    hp: Math.round(stats.hp + (delta.hp ?? 0)),
+    ep: Math.round(stats.ep + (delta.ep ?? 0)),
+    mood: Math.round(stats.mood + (delta.mood ?? 0)),
+    stress: Math.round(stats.stress + (delta.stress ?? 0)),
+    focus: Math.round(stats.focus + (delta.focus ?? 0)),
+  };
+}
+
+function aggregateManualTagDelta(
+  items: Array<{ baseKey: string; sign: 1 | -1 }>,
+) {
+  return items.reduce<Partial<Record<DimensionKey, number>>>((acc, item) => {
+    const config = MANUAL_TAG_LIBRARY.find((tag) => tag.key === item.baseKey);
+    if (!config) {
+      return acc;
+    }
+
+    return mergeDimensionDeltas(acc, multiplyDimensionDelta(config.delta, item.sign));
+  }, {});
 }
 
 function getStatBarPercent(key: DimensionKey, value: number) {
@@ -159,8 +286,8 @@ export function DemoApp() {
   const [mobileTab, setMobileTab] = useState<MobileTab>("home");
   const [currentEventCategoryId, setCurrentEventCategoryId] = useState("");
   const [eventPhase, setEventPhase] = useState<EventPhase>("idle");
-  const [pendingNextCategoryId, setPendingNextCategoryId] = useState("");
   const [resolvingOptionId, setResolvingOptionId] = useState("");
+  const [selectedManualTagKey, setSelectedManualTagKey] = useState<ManualTagKey | "">("");
 
   useEffect(() => {
     const savedSession = window.localStorage.getItem(SESSION_KEY);
@@ -227,6 +354,122 @@ export function DemoApp() {
   }, [currentUser?.role, mobileTab]);
 
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
+    const todayKey = getLocalDateKey();
+
+    setData((current) => {
+      let changed = false;
+      const nextUserStates = { ...current.userStates };
+      let nextDailyLogs = [...current.dailyLogs];
+
+      Object.entries(current.userStates).forEach(([userId, userState]) => {
+        const nextUserState = { ...userState };
+
+        if (nextUserState.dailyProgress?.dateKey !== todayKey) {
+          nextUserState.dailyProgress = {
+            dateKey: todayKey,
+            count: 0,
+          };
+          changed = true;
+        }
+
+        if (nextUserState.manualTags?.dateKey !== todayKey) {
+          const previousManualTags = nextUserState.manualTags;
+
+          if (previousManualTags && previousManualTags.items.length > 0) {
+            const manualDelta = aggregateManualTagDelta(previousManualTags.items);
+              const existingDayLog = nextDailyLogs.find(
+                (log) =>
+                  log.userId === userId &&
+                  (log.dateKey === previousManualTags.dateKey ||
+                    getLocalDateKey(new Date(log.createdAt)) === previousManualTags.dateKey),
+              );
+            const nextStats = applyStatDelta(nextUserState.stats, manualDelta);
+            const eventBaseDelta = existingDayLog
+              ? subtractDimensionDeltas(
+                  existingDayLog.baseDelta,
+                  existingDayLog.manualTagDelta ?? {},
+                )
+              : {};
+            const nextManualTagDelta = mergeDimensionDeltas(
+              existingDayLog?.manualTagDelta ?? {},
+              manualDelta,
+            );
+
+            const nextLog: DailyLog = existingDayLog
+              ? {
+                  ...existingDayLog,
+                  manualTagDelta: nextManualTagDelta,
+                  baseDelta: mergeDimensionDeltas(eventBaseDelta, nextManualTagDelta),
+                  entries: [
+                    ...(existingDayLog.entries ?? []),
+                    ...previousManualTags.items.map((item) => ({
+                      type: "manual-tag" as const,
+                      categoryId: "manual-tags",
+                      categoryTitle: "手动标签",
+                      optionId: item.id,
+                      optionLabel: `${item.label}${item.sign > 0 ? "+" : "-"}`,
+                    })),
+                  ],
+                  after: { ...nextStats },
+                  tags: Array.from(new Set([...(existingDayLog.tags ?? []), "manual-tags"])),
+                }
+              : {
+                  id: crypto.randomUUID(),
+                  userId,
+                  createdAt: new Date().toISOString(),
+                  dateKey: previousManualTags.dateKey,
+                  entries: previousManualTags.items.map((item) => ({
+                    type: "manual-tag" as const,
+                    categoryId: "manual-tags",
+                    categoryTitle: "手动标签",
+                    optionId: item.id,
+                    optionLabel: `${item.label}${item.sign > 0 ? "+" : "-"}`,
+                  })),
+                  manualTagDelta: nextManualTagDelta,
+                  selections: {},
+                  baseDelta: nextManualTagDelta,
+                  ruleDelta: {},
+                  before: { ...nextUserState.stats },
+                  after: { ...nextStats },
+                  triggeredRules: [],
+                  narrative: "手动标签已写入今天。",
+                  tags: ["manual-tags"],
+                };
+
+            nextDailyLogs = [
+              nextLog,
+              ...nextDailyLogs.filter((log) => log.id !== existingDayLog?.id),
+            ].slice(0, 60);
+            nextUserState.stats = nextStats;
+            changed = true;
+          }
+
+          nextUserState.manualTags = {
+            dateKey: todayKey,
+            count: 0,
+            items: [],
+          };
+          changed = true;
+        }
+
+        nextUserStates[userId] = nextUserState;
+      });
+
+      return changed
+        ? {
+            ...current,
+            userStates: nextUserStates,
+            dailyLogs: nextDailyLogs,
+          }
+        : current;
+    });
+  }, [ready]);
+
+  useEffect(() => {
     if (mobileTab !== "events") {
       return;
     }
@@ -278,6 +521,20 @@ export function DemoApp() {
     activeUser && activeState ? projectState(activeUser, activeState, data.dailyLogs) : null;
   const activeTheme =
     activeState ? getStatusTheme(activeState.stats, activeLogs[0]) : "steady";
+  const todayManualTagCount = useMemo(() => {
+    if (!activeState) {
+      return 0;
+    }
+
+    const todayKey = getLocalDateKey();
+    const manualTags = activeState.manualTags;
+
+    if (!manualTags || manualTags.dateKey !== todayKey) {
+      return 0;
+    }
+
+    return manualTags.count;
+  }, [activeState]);
 
   const currentEventCategory =
     todayEventCount >= 99
@@ -291,14 +548,14 @@ export function DemoApp() {
       ? [
           { id: "home" as const, label: "首页" },
           { id: "status" as const, label: "状态" },
-          { id: "events" as const, label: "记录" },
+          { id: "events" as const, label: "事件" },
           { id: "logs" as const, label: "日志" },
           { id: "admin" as const, label: "校准" },
         ]
       : [
           { id: "home" as const, label: "首页" },
           { id: "status" as const, label: "状态" },
-          { id: "events" as const, label: "记录" },
+          { id: "events" as const, label: "事件" },
           { id: "logs" as const, label: "日志" },
         ];
 
@@ -338,21 +595,8 @@ export function DemoApp() {
     const nextProjection = projectState(activeUser, tempState, data.dailyLogs);
     const now = new Date();
     const dateKey = getLocalDateKey(now);
-
-    const log: DailyLog = {
-      id: crypto.randomUUID(),
-      userId: activeUser.id,
-      createdAt: now.toISOString(),
-      dateKey,
-      selections: { [categoryId]: optionId },
-      baseDelta: { ...nextProjection.baseDelta },
-      ruleDelta: { ...nextProjection.ruleDelta },
-      before: { ...activeState.stats },
-      after: { ...nextProjection.nextStats },
-      triggeredRules: [...nextProjection.triggeredRules],
-      narrative: nextProjection.narrative,
-      tags: [...nextProjection.tags],
-    };
+    const category = dailyEventCategories.find((item) => item.id === categoryId);
+    const option = category?.options.find((item) => item.id === optionId);
 
     setData((current) => {
       const currentUserState = current.userStates[activeUser.id];
@@ -361,9 +605,75 @@ export function DemoApp() {
         existingProgress && existingProgress.dateKey === dateKey
           ? existingProgress.count + 1
           : 1;
+      const existingTodayLog = current.dailyLogs.find(
+        (item) =>
+          item.userId === activeUser.id &&
+          (item.dateKey === dateKey ||
+            getLocalDateKey(new Date(item.createdAt)) === dateKey),
+      );
+
+      const nextLog: DailyLog = existingTodayLog
+        ? {
+            ...existingTodayLog,
+            createdAt: now.toISOString(),
+            dateKey,
+            selections: {
+              ...existingTodayLog.selections,
+              [categoryId]: optionId,
+            },
+            entries: [
+              ...(existingTodayLog.entries ?? []),
+              {
+                categoryId,
+                categoryTitle: category?.title ?? categoryId,
+                optionId,
+                optionLabel: option?.label ?? optionId,
+              },
+            ],
+            baseDelta: mergeDimensionDeltas(
+              existingTodayLog.baseDelta,
+              nextProjection.baseDelta,
+            ),
+            ruleDelta: mergeDimensionDeltas(
+              existingTodayLog.ruleDelta,
+              nextProjection.ruleDelta,
+            ),
+            before: existingTodayLog.before,
+            after: { ...nextProjection.nextStats },
+            triggeredRules: [
+              ...existingTodayLog.triggeredRules,
+              ...nextProjection.triggeredRules,
+            ],
+            narrative: nextProjection.narrative,
+            tags: Array.from(
+              new Set([...(existingTodayLog.tags ?? []), ...nextProjection.tags]),
+            ),
+          }
+        : {
+            id: crypto.randomUUID(),
+            userId: activeUser.id,
+            createdAt: now.toISOString(),
+            dateKey,
+            selections: { [categoryId]: optionId },
+            entries: [
+              {
+                categoryId,
+                categoryTitle: category?.title ?? categoryId,
+                optionId,
+                optionLabel: option?.label ?? optionId,
+              },
+            ],
+            baseDelta: { ...nextProjection.baseDelta },
+            ruleDelta: { ...nextProjection.ruleDelta },
+            before: { ...activeState.stats },
+            after: { ...nextProjection.nextStats },
+            triggeredRules: [...nextProjection.triggeredRules],
+            narrative: nextProjection.narrative,
+            tags: [...nextProjection.tags],
+          };
 
       const nextDailyLogs = [
-        log,
+        nextLog,
         ...current.dailyLogs.filter(
           (item) =>
             !(
@@ -414,7 +724,6 @@ export function DemoApp() {
         commitSelection(categoryId, optionId);
         setResolvingOptionId("");
         setCurrentEventCategoryId(nextCategoryId);
-        setPendingNextCategoryId("");
         setEventPhase("idle");
       }, 420);
       return;
@@ -503,9 +812,214 @@ export function DemoApp() {
     }
 
     setCurrentEventCategoryId((current) => getRandomCategoryId(current));
-    setPendingNextCategoryId("");
     setResolvingOptionId("");
     setEventPhase("idle");
+  };
+
+  const commitManualTag = (tagKey: ManualTagKey) => {
+    if (!activeUser || !activeState) {
+      return;
+    }
+
+    const tagConfig = MANUAL_TAG_LIBRARY.find((tag) => tag.key === tagKey);
+    if (!tagConfig) {
+      return;
+    }
+
+    const todayKey = getLocalDateKey();
+
+    setData((current) => {
+      const currentUserState = current.userStates[activeUser.id];
+      const manualTags =
+        currentUserState.manualTags?.dateKey === todayKey
+          ? currentUserState.manualTags
+          : { dateKey: todayKey, count: 0, items: [] };
+
+      if (manualTags.count >= 99) {
+        return current;
+      }
+
+      const nextItem = {
+        id: crypto.randomUUID(),
+        baseKey: tagConfig.key,
+        label: tagConfig.label,
+        sign: 1 as const,
+      };
+
+      return {
+        ...current,
+        userStates: {
+          ...current.userStates,
+          [activeUser.id]: {
+            ...currentUserState,
+            manualTags: {
+              dateKey: todayKey,
+              count: manualTags.count + 1,
+              items: [...manualTags.items, nextItem],
+            },
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    });
+
+    setSelectedManualTagKey("");
+  };
+
+  const handleManualTagPick = (tagKey: ManualTagKey) => {
+    if (todayManualTagCount >= 99) {
+      return;
+    }
+
+    if (selectedManualTagKey === tagKey) {
+      commitManualTag(tagKey);
+      return;
+    }
+
+    setSelectedManualTagKey(tagKey);
+  };
+
+  const toggleManualTagSign = (tagId: string) => {
+    if (!activeUser || !activeState) {
+      return;
+    }
+
+    const todayKey = getLocalDateKey();
+
+    setData((current) => {
+      const currentUserState = current.userStates[activeUser.id];
+      const manualTags = currentUserState.manualTags;
+
+      if (!manualTags || manualTags.dateKey !== todayKey) {
+        return current;
+      }
+
+      const nextItems: typeof manualTags.items = manualTags.items.map((item) =>
+        item.id === tagId
+          ? { ...item, sign: (item.sign === 1 ? -1 : 1) as 1 | -1 }
+          : item,
+      );
+
+      return {
+        ...current,
+        userStates: {
+          ...current.userStates,
+          [activeUser.id]: {
+            ...currentUserState,
+            manualTags: {
+              ...manualTags,
+              items: nextItems,
+            },
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    });
+  };
+
+  const submitManualTags = () => {
+    if (!activeUser || !activeState) {
+      return;
+    }
+
+    const manualTags = activeState.manualTags;
+    const todayKey = getLocalDateKey();
+
+    if (!manualTags || manualTags.dateKey !== todayKey || manualTags.items.length === 0) {
+      return;
+    }
+
+    setData((current) => {
+      const currentUserState = current.userStates[activeUser.id];
+      const currentManualTags = currentUserState.manualTags;
+
+      if (!currentManualTags || currentManualTags.items.length === 0) {
+        return current;
+      }
+
+      const manualDelta = aggregateManualTagDelta(currentManualTags.items);
+      const nextStats = applyStatDelta(currentUserState.stats, manualDelta);
+      const existingTodayLog = current.dailyLogs.find(
+        (log) =>
+          log.userId === activeUser.id &&
+          (log.dateKey === todayKey || getLocalDateKey(new Date(log.createdAt)) === todayKey),
+      );
+      const eventBaseDelta = existingTodayLog
+        ? subtractDimensionDeltas(
+            existingTodayLog.baseDelta,
+            existingTodayLog.manualTagDelta ?? {},
+          )
+        : {};
+      const nextManualTagDelta = mergeDimensionDeltas(
+        existingTodayLog?.manualTagDelta ?? {},
+        manualDelta,
+      );
+
+      const nextLog: DailyLog = existingTodayLog
+        ? {
+            ...existingTodayLog,
+            createdAt: new Date().toISOString(),
+            dateKey: todayKey,
+            entries: [
+              ...(existingTodayLog.entries ?? []),
+              ...currentManualTags.items.map((item) => ({
+                type: "manual-tag" as const,
+                categoryId: "manual-tags",
+                categoryTitle: "手动标签",
+                optionId: item.id,
+                optionLabel: `${item.label}${item.sign > 0 ? "+" : "-"}`,
+              })),
+            ],
+            manualTagDelta: nextManualTagDelta,
+            baseDelta: mergeDimensionDeltas(eventBaseDelta, nextManualTagDelta),
+            after: { ...nextStats },
+            tags: Array.from(new Set([...(existingTodayLog.tags ?? []), "manual-tags"])),
+          }
+        : {
+            id: crypto.randomUUID(),
+            userId: activeUser.id,
+            createdAt: new Date().toISOString(),
+            dateKey: todayKey,
+            entries: currentManualTags.items.map((item) => ({
+              type: "manual-tag" as const,
+              categoryId: "manual-tags",
+              categoryTitle: "手动标签",
+              optionId: item.id,
+              optionLabel: `${item.label}${item.sign > 0 ? "+" : "-"}`,
+            })),
+            manualTagDelta: nextManualTagDelta,
+            selections: {},
+            baseDelta: nextManualTagDelta,
+            ruleDelta: {},
+            before: { ...currentUserState.stats },
+            after: { ...nextStats },
+            triggeredRules: [],
+            narrative: "手动标签已写入今天。",
+            tags: ["manual-tags"],
+          };
+
+      return {
+        ...current,
+        userStates: {
+          ...current.userStates,
+          [activeUser.id]: {
+            ...currentUserState,
+            stats: nextStats,
+            manualTags: {
+              ...currentManualTags,
+              items: [],
+            },
+            updatedAt: new Date().toISOString(),
+          },
+        },
+        dailyLogs: [
+          nextLog,
+          ...current.dailyLogs.filter((log) => log.id !== existingTodayLog?.id),
+        ].slice(0, 60),
+      };
+    });
+
+    setSelectedManualTagKey("");
   };
 
   const getPaneClass = (tab: MobileTab) =>
@@ -550,7 +1064,7 @@ export function DemoApp() {
                   <div className="doodle-scroll login-scroll">
                     <div className="field-stack">
                       <label className="field">
-                        <span>账号</span>
+                        <span>璐﹀彿</span>
                         <input
                           value={loginUsername}
                           onChange={(event) => setLoginUsername(event.target.value)}
@@ -560,13 +1074,13 @@ export function DemoApp() {
                       </label>
 
                       <label className="field">
-                        <span>密码</span>
+                        <span>瀵嗙爜</span>
                         <input
                           type="password"
                           value={loginPassword}
                           onChange={(event) => setLoginPassword(event.target.value)}
                           autoComplete="current-password"
-                          placeholder="输入预置密码"
+                          placeholder="杈撳叆棰勭疆瀵嗙爜"
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
                               handleLogin();
@@ -580,7 +1094,7 @@ export function DemoApp() {
                   </div>
 
                   <button className="ink-button primary-ink-button" onClick={handleLogin}>
-                    进入面板
+                    杩涘叆闈㈡澘
                   </button>
                 </div>
               </section>
@@ -628,18 +1142,20 @@ export function DemoApp() {
               <div className="doodle-scroll mobile-scene">
                 <DoodleMarks className="panel-doodles top-right" />
 
-                <section className="story-block hero-block">
+                <section className="story-block hero-block home-hero-block">
                   <div className="sketch-hero">
                     <div>
                       <h2>{activeUser.displayName}</h2>
-                      <p className="mono-copy">{activeUser.title}</p>
+                      <p className="mono-copy">{`点击标签为今日状态加点 (${todayManualTagCount}/99)`}</p>
                     </div>
-                    <span className="outline-chip">{getRoleLabel(currentUser.role)}</span>
+                    <button className="ink-button ghost-ink-button outline-chip submit-chip" onClick={submitManualTags}>
+                      手动提交
+                    </button>
                   </div>
 
                   {currentUser.role === "admin" ? (
                     <label className="field">
-                      <span>当前观察对象</span>
+                        <span>当前观察对象</span>
                       <select
                         value={adminTargetId}
                         onChange={(event) => setAdminTargetId(event.target.value)}
@@ -654,15 +1170,36 @@ export function DemoApp() {
                   ) : null}
 
                   <div className="tag-ribbon">
-                    <span>{activeUser.profile.ageBand}</span>
-                    <span>{activeUser.profile.bodyCondition}</span>
-                    <span>{activeUser.profile.lifestyle}</span>
-                    <span>{activeUser.profile.injury}</span>
-                    <span>{activeUser.profile.illness}</span>
+                    {(activeState.manualTags?.items ?? []).length > 0
+                      ? activeState.manualTags?.items.map((item) => (
+                          <button
+                            key={item.id}
+                            className="manual-tag-chip"
+                            onClick={() => toggleManualTagSign(item.id)}
+                          >
+                            {item.label}
+                            {item.sign > 0 ? "+" : "-"}
+                          </button>
+                        ))
+                      : null}
                   </div>
-
-                  <p className="doodle-copy">{activeUser.notes}</p>
                 </section>
+
+                <div className="manual-tag-grid">
+                  {MANUAL_TAG_LIBRARY.map((tag) => {
+                    const isActive = selectedManualTagKey === tag.key;
+
+                    return (
+                      <button
+                        key={tag.key}
+                        className={isActive ? "manual-tag-chip active" : "manual-tag-chip"}
+                        onClick={() => handleManualTagPick(tag.key)}
+                      >
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </section>
           </div>
@@ -679,8 +1216,8 @@ export function DemoApp() {
 
                 <section className="story-block">
                   <div className="subhead">
-                    <h3>五维</h3>
-                    <span>今天的底色</span>
+                    <h3>浜旂淮</h3>
+                      <span>全数值 999 即可飞升</span>
                   </div>
 
                   <div className="stats-stack">
@@ -709,7 +1246,7 @@ export function DemoApp() {
           <div className={getPaneClass("events")}>
             <section className="ink-card sketch-panel fill-panel">
               <div className="doodle-titlebar">
-                <span>{`记录 (${todayEventCount}/99)`}</span>
+                <span>{`浜嬩欢 (${todayEventCount}/99)`}</span>
                 <span>再次点击以提交状态</span>
               </div>
 
@@ -762,7 +1299,7 @@ export function DemoApp() {
                 ) : (
                   <section className="story-block">
                     <div className="subhead">
-                      <h3>今日已满</h3>
+                      <h3>浠婃棩宸叉弧</h3>
                       <span>99 / 99</span>
                     </div>
                     <p className="doodle-copy">今天的记录次数已经用完，明天再继续。</p>
@@ -775,15 +1312,15 @@ export function DemoApp() {
           <div className={getPaneClass("logs")}>
             <section className="ink-card sketch-panel fill-panel">
               <div className="doodle-titlebar">
-                <span>日志</span>
-                <span>回看变化</span>
+                <span>鏃ュ織</span>
+                <span>鍥炵湅鍙樺寲</span>
               </div>
 
               <div className="doodle-scroll mobile-scene">
                 <DoodleMarks className="panel-doodles top-left" />
                 <div className="log-group">
                   <div className="subhead">
-                    <h3>每日结算</h3>
+                    <h3>姣忔棩缁撶畻</h3>
                     <span>{activeLogs.length} 条</span>
                   </div>
 
@@ -816,16 +1353,46 @@ export function DemoApp() {
                               .filter(Boolean)}
                           </div>
                           <div className="tag-ribbon">
-                            {Object.entries(log.selections).map(([categoryId, optionId]) => {
-                              const category = dailyEventCategories.find((item) => item.id === categoryId);
-                              const option = category ? getOptionById(category, optionId) : null;
+                            {log.entries?.length
+                              ? (() => {
+                                  const grouped = new Map<string, { label: string; count: number }>();
 
-                              return option ? (
-                                <span key={`${log.id}-${option.id}`}>
-                                  {category?.title}: {option.label}
-                                </span>
-                              ) : null;
-                            })}
+                                  log.entries.forEach((entry) => {
+                                    const key = entry.categoryId === "manual-tags"
+                                      ? entry.optionLabel
+                                      : `${entry.categoryTitle}:${entry.optionLabel}`;
+                                    const existing = grouped.get(key);
+
+                                    if (existing) {
+                                      existing.count += 1;
+                                    } else {
+                                      grouped.set(key, {
+                                        label:
+                                          entry.categoryId === "manual-tags"
+                                            ? entry.optionLabel
+                                            : `${entry.categoryTitle}: ${entry.optionLabel}`,
+                                        count: 1,
+                                      });
+                                    }
+                                  });
+
+                                  return Array.from(grouped.entries()).map(([key, value]) => (
+                                    <span key={`${log.id}-${key}`}>
+                                      {value.label}
+                                      {value.count > 1 ? ` ${value.count}` : ""}
+                                    </span>
+                                  ));
+                                })()
+                              : Object.entries(log.selections).map(([categoryId, optionId]) => {
+                                  const category = dailyEventCategories.find((item) => item.id === categoryId);
+                                  const option = category ? getOptionById(category, optionId) : null;
+
+                                  return option ? (
+                                    <span key={`${log.id}-${option.id}`}>
+                                      {category?.title}: {option.label}
+                                    </span>
+                                  ) : null;
+                                })}
                           </div>
                         </article>
                       ))
@@ -848,7 +1415,7 @@ export function DemoApp() {
                           <div className="log-meta">
                             <strong>{new Date(log.createdAt).toLocaleString()}</strong>
                             <span>
-                              管理员校准：{getDimensionLabel(log.dimension)} {formatDelta(log.delta)}
+                              绠＄悊鍛樻牎鍑嗭細{getDimensionLabel(log.dimension)} {formatDelta(log.delta)}
                             </span>
                           </div>
                           <p className="mono-copy">{log.reason}</p>
@@ -891,14 +1458,14 @@ export function DemoApp() {
                     </label>
 
                     <label className="field">
-                      <span>修改模式</span>
+                      <span>淇敼妯″紡</span>
                       <select
                         value={calibrationMode}
                         onChange={(event) =>
                           setCalibrationMode(event.target.value as CalibrationMode)
                         }
                       >
-                        <option value="delta">增量修改</option>
+                        <option value="delta">????</option>
                         <option value="set">直接设值</option>
                       </select>
                     </label>
@@ -928,7 +1495,7 @@ export function DemoApp() {
                     </div>
 
                     <label className="field">
-                      <span>原因模板</span>
+                      <span>鍘熷洜妯℃澘</span>
                       <select
                         value={calibrationReason}
                         onChange={(event) => setCalibrationReason(event.target.value)}
@@ -991,3 +1558,4 @@ export function DemoApp() {
     </main>
   );
 }
+
