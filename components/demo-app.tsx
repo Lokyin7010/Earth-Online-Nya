@@ -894,11 +894,18 @@ export function DemoApp() {
         return current;
       }
 
-      const nextItems: typeof manualTags.items = manualTags.items.map((item) =>
-        item.id === tagId
-          ? { ...item, sign: (item.sign === 1 ? -1 : 1) as 1 | -1 }
-          : item,
-      );
+      const targetItem = manualTags.items.find((item) => item.id === tagId);
+
+      if (!targetItem) {
+        return current;
+      }
+
+      const shouldRemove = targetItem.sign === -1;
+      const nextItems: typeof manualTags.items = shouldRemove
+        ? manualTags.items.filter((item) => item.id !== tagId)
+        : manualTags.items.map((item) =>
+            item.id === tagId ? { ...item, sign: -1 as const } : item,
+          );
 
       return {
         ...current,
@@ -908,6 +915,7 @@ export function DemoApp() {
             ...currentUserState,
             manualTags: {
               ...manualTags,
+              count: shouldRemove ? Math.max(0, manualTags.count - 1) : manualTags.count,
               items: nextItems,
             },
             updatedAt: new Date().toISOString(),
@@ -1050,7 +1058,7 @@ export function DemoApp() {
 
                 <div className="doodle-note">
                   <span className="note-mark">●</span>
-                  <span>默认角色：内内 / 高压波动型</span>
+                  <span>内测角色：内内</span>
                 </div>
               </section>
 
@@ -1064,7 +1072,7 @@ export function DemoApp() {
                   <div className="doodle-scroll login-scroll">
                     <div className="field-stack">
                       <label className="field">
-                        <span>璐﹀彿</span>
+                        <span>账号</span>
                         <input
                           value={loginUsername}
                           onChange={(event) => setLoginUsername(event.target.value)}
@@ -1074,13 +1082,13 @@ export function DemoApp() {
                       </label>
 
                       <label className="field">
-                        <span>瀵嗙爜</span>
+                        <span>密码</span>
                         <input
                           type="password"
                           value={loginPassword}
                           onChange={(event) => setLoginPassword(event.target.value)}
                           autoComplete="current-password"
-                          placeholder="杈撳叆棰勭疆瀵嗙爜"
+                          placeholder="输入预置密码"
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
                               handleLogin();
@@ -1094,7 +1102,7 @@ export function DemoApp() {
                   </div>
 
                   <button className="ink-button primary-ink-button" onClick={handleLogin}>
-                    杩涘叆闈㈡澘
+                    进入面板
                   </button>
                 </div>
               </section>
@@ -1216,7 +1224,7 @@ export function DemoApp() {
 
                 <section className="story-block">
                   <div className="subhead">
-                    <h3>浜旂淮</h3>
+                    <h3>五维</h3>
                       <span>全数值 999 即可飞升</span>
                   </div>
 
@@ -1246,7 +1254,7 @@ export function DemoApp() {
           <div className={getPaneClass("events")}>
             <section className="ink-card sketch-panel fill-panel">
               <div className="doodle-titlebar">
-                <span>{`浜嬩欢 (${todayEventCount}/99)`}</span>
+                <span>{`事件 (${todayEventCount}/99)`}</span>
                 <span>再次点击以提交状态</span>
               </div>
 
@@ -1299,7 +1307,7 @@ export function DemoApp() {
                 ) : (
                   <section className="story-block">
                     <div className="subhead">
-                      <h3>浠婃棩宸叉弧</h3>
+                      <h3>今日已满</h3>
                       <span>99 / 99</span>
                     </div>
                     <p className="doodle-copy">今天的记录次数已经用完，明天再继续。</p>
@@ -1312,15 +1320,15 @@ export function DemoApp() {
           <div className={getPaneClass("logs")}>
             <section className="ink-card sketch-panel fill-panel">
               <div className="doodle-titlebar">
-                <span>鏃ュ織</span>
-                <span>鍥炵湅鍙樺寲</span>
+                <span>日志</span>
+                <span>回看变化</span>
               </div>
 
               <div className="doodle-scroll mobile-scene">
                 <DoodleMarks className="panel-doodles top-left" />
                 <div className="log-group">
                   <div className="subhead">
-                    <h3>姣忔棩缁撶畻</h3>
+                    <h3>每日结算</h3>
                     <span>{activeLogs.length} 条</span>
                   </div>
 
@@ -1415,7 +1423,7 @@ export function DemoApp() {
                           <div className="log-meta">
                             <strong>{new Date(log.createdAt).toLocaleString()}</strong>
                             <span>
-                              绠＄悊鍛樻牎鍑嗭細{getDimensionLabel(log.dimension)} {formatDelta(log.delta)}
+                              管理员校准：{getDimensionLabel(log.dimension)} {formatDelta(log.delta)}
                             </span>
                           </div>
                           <p className="mono-copy">{log.reason}</p>
@@ -1458,14 +1466,14 @@ export function DemoApp() {
                     </label>
 
                     <label className="field">
-                      <span>淇敼妯″紡</span>
+                      <span>修改模式</span>
                       <select
                         value={calibrationMode}
                         onChange={(event) =>
                           setCalibrationMode(event.target.value as CalibrationMode)
                         }
                       >
-                        <option value="delta">????</option>
+                        <option value="delta">增减</option>
                         <option value="set">直接设值</option>
                       </select>
                     </label>
@@ -1495,7 +1503,7 @@ export function DemoApp() {
                     </div>
 
                     <label className="field">
-                      <span>鍘熷洜妯℃澘</span>
+                      <span>原因模板</span>
                       <select
                         value={calibrationReason}
                         onChange={(event) => setCalibrationReason(event.target.value)}
